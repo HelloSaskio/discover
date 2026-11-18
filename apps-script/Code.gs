@@ -73,7 +73,7 @@ function doPost(e) {
   try {
     sh = ss_().getSheetByName(CONFIG.SHEET);
     const subCol = AUTO.indexOf('Client submission ID') + 1;
-    const last = sh.getLastRow();
+    const last = lastDataRow_(sh);
 
     // Re-send of an enquiry that was already saved (e.g. "Try again" after a lost reply): return the same reference.
     if (d.submissionId && last > 1) {
@@ -109,10 +109,14 @@ function doPost(e) {
       CONFIG.PRIVACY_VERSION, d.marketing ? 'Yes' : 'No', d.marketing ? ts : '',
       'Pending', 'Pending', s_(d.submissionId)
     ];
-    // Automated columns are formatted as plain text in setup(); the apostrophe only neutralises formula-like input.
-    sh.appendRow(values.map(x => (typeof x === 'string' && /^[=+\-@]/.test(x)) ? "'" + x : x));
+    // Write to the first empty row under the last enquiry, as plain text (keeps leading zeros, stops auto-formatting).
+    // The apostrophe only neutralises formula-like input.
+    row = last + 1;
+    if (row > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 200);
+    const target = sh.getRange(row, 1, 1, AUTO.length);
+    target.setNumberFormat('@');
+    target.setValues([values.map(x => (typeof x === 'string' && /^[=+\-@]/.test(x)) ? "'" + x : String(x))]);
     SpreadsheetApp.flush();
-    row = sh.getLastRow();
   } catch (err) {
     log_('save_failed', String(err));
     try { lock.releaseLock(); } catch (e2) {}
@@ -168,33 +172,34 @@ function wordmark_() {
   }
   return b64 ? Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', 'saskio-wordmark.png') : null;
 }
-let WM_ON = false;
-const WM = (h) => WM_ON
-  ? '<img src="cid:wm" alt="Saski’O" height="' + h + '" style="height:' + h + 'px;width:auto;vertical-align:baseline;border:0">'
-  : '<span style="font-weight:600;letter-spacing:.01em">Saski’O</span>';
 
 function sendAck_(d) {
-  const wm = wordmark_(); WM_ON = !!wm;
-  const font = "font-family:Manrope,'Helvetica Neue',Arial,sans-serif;";
+  const wm = wordmark_();
+  const sign = wm
+    ? '<img src="cid:wm" alt="Saski’O" width="100" height="22" style="display:block;width:100px;height:22px;border:0;margin:0 0 6px 0">'
+    : '<div style="font-family:Arial,sans-serif;font-size:20px;font-weight:600;color:#1F1B19;margin:0 0 6px 0">Saski’O</div>';
+  const body = "font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.6;color:#3D3835;margin:0 0 18px 0;";
   const html =
-    '<div style="background:#F4F2EF;padding:32px 16px">' +
-    '<div style="max-width:520px;margin:0 auto;background:#FBFAF8;border:1px solid #D8D2CC;border-radius:12px;padding:36px 32px;' + font + 'color:#3D3835;font-size:16px;line-height:1.7">' +
-    '<p style="margin:0 0 16px">Thank you for contacting ' + WM(13) + '.</p>' +
-    '<p style="margin:0 0 16px">I’ll personally review your enquiry and be in touch.</p>' +
-    '<p style="margin:0">Speak soon,</p>' +
-    '<p style="margin:10px 0 4px;color:#1F1B19">' + WM(24) + '</p>' +
-    '<p style="margin:0;color:#1F1B19">x</p>' +
-    '<p style="margin:32px 0 0;padding-top:16px;border-top:1px solid #D8D2CC;font-size:12px;line-height:1.6;color:#736C67">' +
-    'You’re receiving this because you made an enquiry with ' + WM(10) + '. ' +
-    (CONFIG.SITE_URL.indexOf('http') === 0 ? '<a href="' + CONFIG.SITE_URL + '#privacy" style="color:#736C67">Privacy notice</a><br>' : '<br>') +
-    '+44 7876 327901 · hello.saskio@gmail.com · Instagram @hello.saskio</p>' +
-    '</div></div>';
-  const text = 'Thank you for contacting Saski’O.\n\nI’ll personally review your enquiry and be in touch.\n\nSpeak soon,\nSaski’O\nx\n\n' +
-    'You’re receiving this because you made an enquiry with Saski’O.\n+44 7876 327901 · hello.saskio@gmail.com · Instagram @hello.saskio';
+    '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
+    '<body style="margin:0;padding:0;background:#F4F2EF">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F2EF"><tr><td align="center" style="padding:40px 24px">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:460px"><tr><td align="left">' +
+    '<p style="' + body + '">Thank you for your enquiry.</p>' +
+    '<p style="' + body + '">I’ll personally review it and be in touch.</p>' +
+    '<p style="' + body + 'margin-bottom:14px">Speak soon,</p>' +
+    sign +
+    '<p style="' + body + 'color:#1F1B19;margin:0">x</p>' +
+    '<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#8A827C;margin:40px 0 0 0;padding-top:14px;border-top:1px solid #D8D2CC">' +
+    'hello.saskio@gmail.com · +44 7876 327901' +
+    (CONFIG.SITE_URL.indexOf('http') === 0 ? ' · <a href="' + CONFIG.SITE_URL + '#privacy" style="color:#8A827C">Privacy notice</a>' : '') +
+    '</p>' +
+    '</td></tr></table></td></tr></table></body></html>';
+  const text = 'Thank you for your enquiry.\n\nI’ll personally review it and be in touch.\n\nSpeak soon,\nSaski’O\nx\n\n' +
+    'hello.saskio@gmail.com · +44 7876 327901';
   MailApp.sendEmail({
     to: String(d.email).trim(), subject: 'Thank you for your enquiry | Saski’O',
     body: text, htmlBody: html, inlineImages: wm ? { wm: wm } : {},
-    name: 'Saski’O', replyTo: CONFIG.NOTIFY_TO
+    name: 'Saski’O'
   });
 }
 
@@ -317,6 +322,12 @@ function authoriseAndTest() {
 
 /* ------------------------------------------------------------------ helpers */
 
+function lastDataRow_(sh) {
+  const n = sh.getLastRow(); if (n < 2) return 1;
+  const a = sh.getRange(2, 1, n - 1, 1).getValues();
+  for (let i = a.length - 1; i >= 0; i--) if (a[i][0] != null && String(a[i][0]).trim() !== '') return i + 2;
+  return 1;
+}
 function ss_() { return SpreadsheetApp.openById(CONFIG.SHEET_ID); }
 function s_(x) { return x == null ? '' : String(x).trim(); }
 function ukDate_(iso) { if (!iso) return ''; const p = String(iso).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso); }
