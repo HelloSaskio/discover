@@ -153,6 +153,8 @@ button.lnk{background:none;border:0;padding:0;font:inherit;text-decoration:under
 .tel:focus-within{outline:2px solid var(--ink);outline-offset:1px}
 .field.invalid .tel{border-color:var(--err)}
 
+.nw{white-space:nowrap}
+.ty .note{font-family:var(--font);font-size:13px;line-height:1.6;color:var(--muted);max-width:300px;margin:32px auto 0}
 </style>
 </head>
 <body>
@@ -203,7 +205,7 @@ function home(){
     ['Connect','I’ll be in touch, using your preferred method of contact.']];
   return `<div class="home">
     <div class="brand">${W}<div class="eyebrow">Experience led travel</div></div>
-    <p class="intro">Life’s biggest trips. Tell me where you’d love to go, and I’ll start shaping an experience-led trip around the way you like to travel. ✨</p>
+    <p class="intro">Life’s biggest trips. Tell me where you’d love to go, and I’ll start shaping an experience-led trip around the way you like to <span class="nw">travel&nbsp;✨</span></p>
     <div class="stages-title"><span class="eyebrow type">Start your journey here</span></div>
     ${stages.map((s,i)=>`<div class="stage"><div class="n">0${i+1}</div><div><h3>${s[0]}</h3><p>${s[1]}</p></div></div>`).join('')}
     <div class="cta-wrap"><button class="primary" data-go="form">Discover now</button>
@@ -316,7 +318,8 @@ function privacyNotice(back){
 }
 function thanks(){
   return `<div class="ty"><h2>Thank you for your enquiry!</h2>
-    <div class="sign">Speak soon,<br>${W}<br><span class="x">x</span></div></div>`;
+    <div class="sign">Speak soon,<br>${W}<br><span class="x">x</span></div>
+    <p class="note">You’ll receive a confirmation email shortly. Please check your junk or spam folder if you don’t see it.</p></div>`;
 }
 function needPhone(){return S.d.contact==='Phone call'||S.d.contact==='WhatsApp';}
 
