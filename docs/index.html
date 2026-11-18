@@ -146,6 +146,13 @@ button.lnk{background:none;border:0;padding:0;font:inherit;text-decoration:under
 @media (max-width:359px){.row2{grid-template-columns:1fr}.home{padding:36px 20px 0}.f-head{padding:18px 18px 0}.f-body{padding:8px 18px 24px}.home .intro{font-size:18px}.ages{grid-template-columns:repeat(2,1fr)}.navbtns .primary{max-width:none}}
 @media (min-width:768px){.home{padding-top:80px}.home .intro{font-size:21px}.brand .wm{font-size:52px}.f-head{padding-top:40px}}
 
+.tel{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;background:var(--field);overflow:hidden}
+.tel .cc{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid var(--line);font-size:16px;color:var(--ink);white-space:nowrap;flex:none}
+.field .tel input[type=tel]{border:0;border-radius:0;flex:1;min-width:0;background:transparent}
+.field .tel input[type=tel]:focus{outline:none}
+.tel:focus-within{outline:2px solid var(--ink);outline-offset:1px}
+.field.invalid .tel{border-color:var(--err)}
+
 </style>
 </head>
 <body>
@@ -175,7 +182,9 @@ function fromUrl(){
   return {screen:direct?'form':(location.hash==='#privacy'?'privacy':'home'),
     hidden:{utm_source:g('utm_source'),utm_medium:g('utm_medium'),utm_campaign:g('utm_campaign'),utm_content:g('utm_content'),fbclid:!!q.get('fbclid'),entry:direct?'direct':'homepage'}};
 }
-function blank(){return {dest:'',dateMode:'',from:'',to:'',flex:'',duration:'',adults:2,children:0,ages:[],budget:'',looking:'',found:'',interests:[],notes:'',name:'',email:'',phone:'',contact:'',marketing:false};}
+function blank(){return {dest:'',dateMode:'',from:'',to:'',flex:'',duration:'',adults:2,children:0,ages:[],budget:'',looking:'',found:'',interests:[],notes:'',name:'',email:'',phone:'',contact:'',marketing:false,ukResident:false};}
+// UK mobile: accepts 07…, +44 7…, 0044 7…, 44 7…, (0)7… or 7…; returns '+44 7xxx xxxxxx' or '' if not a UK mobile
+function ukMobile(raw){let s=String(raw||'').replace(/\(0\)/g,'').replace(/[\s\-().]/g,'');if(!s)return '';if(s.startsWith('+44'))s=s.slice(3);else if(s.startsWith('0044'))s=s.slice(4);else if(s.startsWith('44')&&s.length===12)s=s.slice(2);else if(s.startsWith('0'))s=s.slice(1);return /^7\d{9}$/.test(s)?'+44 '+s.slice(0,4)+' '+s.slice(4):'';}
 function fresh(){
   const u=fromUrl();
   if(!u.hidden.utm_source&&u.hidden.entry==='direct'){u.hidden.utm_source='unknown';u.hidden.utm_medium='direct_link';}
@@ -268,7 +277,9 @@ function form(){
     <div class="field" data-f="name"><label for="name">Your name</label><input type="text" id="name" maxlength="${MAX.name}" autocomplete="name" autocapitalize="words" enterkeyhint="next" value="${esc(d.name)}"><div class="err">Please enter your name.</div></div>
     <div class="field" data-f="email"><label for="email">Email</label><input type="email" id="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(d.email)}"><div class="err">Please enter a valid email address, e.g. name@example.com.</div></div>
     <div class="field"><span class="lbl">How would you prefer I contact you? <span class="opt">(optional)</span></span>${chips('contact',CONTACT,d.contact,false)}</div>
-    <div class="field" data-f="phone"><label for="phone">Phone ${needPhone()?'':'<span class="opt">(optional)</span>'}</label><input type="tel" id="phone" maxlength="${MAX.phone}" autocomplete="tel" inputmode="tel" enterkeyhint="done" value="${esc(d.phone)}" placeholder="e.g. 07700 900123"><div class="err">Please add a phone number so I can ${d.contact==='WhatsApp'?'message you on WhatsApp':'call you'}.</div></div>
+    <div class="field" data-f="phone"><label for="phone">Phone ${needPhone()?'':'<span class="opt">(optional)</span>'}<span class="sub">UK mobile</span></label><div class="tel"><span class="cc" aria-hidden="true">🇬🇧 +44</span><input type="tel" id="phone" maxlength="${MAX.phone}" autocomplete="tel-national" inputmode="tel" enterkeyhint="done" value="${esc(d.phone)}" placeholder="7700 900123" aria-label="UK mobile number"></div><div class="err" id="phoneErr">Please enter a UK mobile number, e.g. 07700 900123.</div></div>
+
+    <div class="field" data-f="uk"><label class="check"><input type="checkbox" id="ukResident" ${d.ukResident?'checked':''}><span>I confirm I am a UK resident.</span></label><div class="err">Please confirm you are a UK resident.</div></div>
     <label class="check"><input type="checkbox" id="marketing" ${d.marketing?'checked':''}><span>I’d like to receive occasional travel inspiration from ${W}. <span class="opt">(optional, unsubscribe any time)</span></span></label>
     <p class="privnote">I’ll only use your details to respond to your enquiry. See the <a href="#privacy" data-privacy>privacy notice</a>.</p>
     <div class="hp" aria-hidden="true"><label>Website <input type="text" id="website" tabindex="-1" autocomplete="off" value=""></label></div>
@@ -351,7 +362,7 @@ function save(){
   const v=id=>{const el=document.getElementById(id);return el?el.value.trim():undefined};
   ['dest','from','to','flex','found','notes','name','email','phone'].forEach(k=>{const x=v(k);if(x!==undefined)S.d[k]=x.slice(0,MAX[k]||1000);});
   document.querySelectorAll('[data-age]').forEach(s=>S.d.ages[+s.dataset.age]=s.value);
-  ['marketing'].forEach(k=>{const el=document.getElementById(k);if(el)S.d[k]=el.checked;});
+  ['marketing','ukResident'].forEach(k=>{const el=document.getElementById(k);if(el)S.d[k]=el.checked;});
   const hp=document.getElementById('website'); if(hp) S.hp=hp.value;
   draft();
 }
@@ -373,7 +384,10 @@ function validate(){
   if(S.step===3){
     if(mark('name',!d.name))bad.push('name');
     if(mark('email',!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)))bad.push('email');
-    if(mark('phone',needPhone()&&d.phone.replace(/\D/g,'').length<7))bad.push('phone');
+    {const ph=ukMobile(d.phone),empty=!String(d.phone||'').trim();const pe=document.getElementById('phoneErr');
+     if(pe)pe.textContent=empty?('Please add a UK mobile number so I can '+(d.contact==='WhatsApp'?'message you on WhatsApp.':'call you.')):'Please enter a UK mobile number, e.g. 07700 900123.';
+     if(mark('phone',(needPhone()&&empty)||(!empty&&!ph)))bad.push('phone');}
+    if(mark('uk',!d.ukResident))bad.push('uk');
   }
   if(bad.length){const el=document.querySelector(`#app [data-f="${bad[0]}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'});}
   return !bad.length;
@@ -389,6 +403,7 @@ function next(){
 async function submit(){
   const payload=Object.assign({},S.d,S.hidden,{submissionId:S.submissionId,website:S.hp||''});
   payload.ages=S.d.ages.slice(0,S.d.children);
+  payload.phone=ukMobile(S.d.phone); payload.ukResident=!!S.d.ukResident;
   const fail=(msg)=>{S.sending=false;S.error=true;S.errorMsg=msg;render(false);const a=document.querySelector('.alert');if(a)a.scrollIntoView({block:'center'});};
   if(!/^https:\/\/script\.google\.com\//.test(ENDPOINT)){fail('Sending isn’t connected yet (test build). Please email hello.saskio@gmail.com.');return;}
   const ctl=('AbortController' in window)?new AbortController():null; const timer=setTimeout(()=>ctl&&ctl.abort(),25000);

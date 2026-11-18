@@ -30,13 +30,13 @@ const AUTO = [
   'Already looking?','Found a place — details','Interests','Additional details / occasion',
   'Source channel','Link / placement','Campaign','Content','Entry route','Click ID present',
   'Privacy notice version shown','Marketing consent','Marketing consent at',
-  'Internal notification','Acknowledgement email','Client submission ID'
+  'Internal notification','Acknowledgement email','Client submission ID','UK resident confirmed'
 ];
 // Columns for Victoria (manual) and calculated columns — after the automated block, never written by the script.
 const MANUAL = [
   ['Status','manual'],['Owner','manual'],['Next action','manual'],['Follow-up date','manual'],['Last contacted','manual'],
-  ['Est. booking value (£)','manual'],['Gross commission %','manual'],['Saski’O share %','manual'],
-  ['Net commission (£)','formula'],['Projected hours','manual'],['Net £ per hour','formula'],['vs £25/hr benchmark','formula'],
+  ['Est. booking value (£)','manual'],['Supplier commission %','manual'],['Est. gross commission (£)','formula'],
+  ['Est. net commission (£)','formula'],['Est. working hours','manual'],['Est. hourly return (£)','formula'],['vs £25/hr net benchmark','formula'],
   ['Asset-library match','manual'],['Outcome','manual'],['Delete after','formula']
 ];
 
@@ -101,13 +101,13 @@ function doPost(e) {
     const ages = (d.ages || []).slice(0, d.children).map(a => String(a) === '0' ? '<1' : String(a)).join(', ');
 
     const values = [
-      id, ts, CONFIG.TIMEZONE, s_(d.name), s_(d.email), s_(d.phone), s_(d.contact),
+      id, ts, CONFIG.TIMEZONE, s_(d.name), s_(d.email), ukMobile_(d.phone), s_(d.contact),
       s_(d.dest), d.dateMode === LISTS.dateMode[0] ? 'Specific' : 'Flexible', ukDate_(d.from), ukDate_(d.to), s_(d.flex), s_(d.duration),
       d.adults, d.children, ages, d.adults + d.children, s_(d.budget),
       s_(d.looking), s_(d.found), (d.interests || []).join('; '), s_(d.notes),
       s_(d.utm_source) || 'unknown', s_(d.utm_medium) || 'unknown', s_(d.utm_campaign), s_(d.utm_content), s_(d.entry), d.fbclid ? 'Yes' : 'No',
       CONFIG.PRIVACY_VERSION, d.marketing ? 'Yes' : 'No', d.marketing ? ts : '',
-      'Pending', 'Pending', s_(d.submissionId)
+      'Pending', 'Pending', s_(d.submissionId), d.ukResident === true ? 'Yes' : 'No'
     ];
     // Write to the first empty row under the last enquiry, as plain text (keeps leading zeros, stops auto-formatting).
     // The apostrophe only neutralises formula-like input.
@@ -115,7 +115,8 @@ function doPost(e) {
     if (row > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 200);
     const target = sh.getRange(row, 1, 1, AUTO.length);
     target.setNumberFormat('@');
-    target.setValues([values.map(x => (typeof x === 'string' && /^[=+\-@]/.test(x)) ? "'" + x : String(x))]);
+    // Phone (col 6) is built by ukMobile_() so it is always safe; the plain-text format keeps "+44" as text.
+    target.setValues([values.map((x, i) => (i !== 5 && typeof x === 'string' && /^[=+\-@]/.test(x)) ? "'" + x : String(x))]);
     SpreadsheetApp.flush();
   } catch (err) {
     log_('save_failed', String(err));
@@ -152,7 +153,10 @@ function validate_(d) {
   if (LISTS.budget.indexOf(d.budget) < 0) return 'budget';
   if (LISTS.looking.indexOf(d.looking) < 0) return 'looking';
   if (LISTS.contact.indexOf(d.contact || '') < 0) return 'contact';
-  if ((d.contact === 'Phone call' || d.contact === 'WhatsApp') && String(d.phone || '').replace(/\D/g, '').length < 7) return 'phone';
+  const phoneGiven = String(d.phone || '').trim() !== '';
+  if (phoneGiven && !ukMobile_(d.phone)) return 'phone';
+  if ((d.contact === 'Phone call' || d.contact === 'WhatsApp') && !phoneGiven) return 'phone';
+  if (d.ukResident !== true) return 'uk';
   if ((d.interests || []).some(x => LISTS.interests.indexOf(x) < 0)) return 'interests';
   return null;
 }
@@ -173,52 +177,47 @@ function wordmark_() {
   return b64 ? Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', 'saskio-wordmark.png') : null;
 }
 
-// Reusable Saski’O branded contact footer (Ink & Paper). Used by customer emails.
+// Reusable Saski’O branded contact card (Ink & Paper). Used by customer emails.
 function brandFooter_() {
   const caps = 'font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#736C67;margin:0;';
   const line = 'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.9;color:#3D3835;margin:0;';
   const a = 'color:#3D3835;text-decoration:none;';
   return '' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;border-top:1px solid #D8D2CC"><tr><td align="center" style="padding:24px 0 0 0">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;background:#FBFAF8;border:1px solid #D8D2CC;border-radius:12px">' +
+    '<tr><td align="center" style="padding:24px 20px">' +
     '<p style="' + caps + '">Experience led travel</p>' +
-    '<p style="' + caps + 'letter-spacing:1.5px;font-size:10px;margin:8px 0 16px 0">Discover &bull; Belong &bull; Experience &bull; Connect</p>' +
-    '<p style="' + line + '">📞 <a href="tel:+447876327901" style="' + a + '">+44 (0)7876 327901</a></p>' +
-    '<p style="' + line + '">✉️ <a href="mailto:hello.saskio@gmail.com" style="' + a + '">hello.saskio@gmail.com</a></p>' +
+    '<p style="' + caps + 'letter-spacing:1.5px;margin:8px 0 16px 0">Discover &bull; Belong &bull; Experience &bull; Connect</p>' +
+    '<p style="' + line + '">Telephone: <a href="tel:+447876327901" style="' + a + '">+44 (0)7876 327901</a></p>' +
+    '<p style="' + line + '">Email: <a href="mailto:hello.saskio@gmail.com" style="' + a + '">hello.saskio@gmail.com</a></p>' +
     '<p style="' + line + '">Instagram: <a href="https://www.instagram.com/hello.saskio" style="' + a + '">@hello.saskio</a></p>' +
     '<p style="' + line + '">Facebook: <a href="https://www.facebook.com/hello.saskio" style="' + a + '">hello.saskio</a></p>' +
-    '<p style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#8A827C;margin:18px 0 0 0">' +
-    'You’re receiving this email because you made an enquiry through Discover.' +
-    (CONFIG.SITE_URL.indexOf('http') === 0 ? '<br><a href="' + CONFIG.SITE_URL + '#privacy" style="color:#8A827C">Privacy notice</a>' : '') +
-    '</p></td></tr></table>';
+    (CONFIG.SITE_URL.indexOf('http') === 0 ? '<p style="' + line + 'margin-top:10px"><a href="' + CONFIG.SITE_URL + '#privacy" style="color:#736C67;font-size:12px">Privacy notice</a></p>' : '') +
+    '</td></tr></table>';
 }
 function brandFooterText_() {
-  return 'EXPERIENCE LED TRAVEL\nDiscover • Belong • Experience • Connect\n\n' +
-    '📞 +44 (0)7876 327901\n✉️ hello.saskio@gmail.com\nInstagram: @hello.saskio\nFacebook: hello.saskio\n\n' +
-    'You’re receiving this email because you made an enquiry through Discover.' +
+  return 'EXPERIENCE LED TRAVEL\nDISCOVER • BELONG • EXPERIENCE • CONNECT\n\n' +
+    'Telephone: +44 (0)7876 327901\nEmail: hello.saskio@gmail.com\nInstagram: @hello.saskio\nFacebook: hello.saskio' +
     (CONFIG.SITE_URL.indexOf('http') === 0 ? '\nPrivacy notice: ' + CONFIG.SITE_URL + '#privacy' : '');
 }
 
 function sendAck_(d) {
   const wm = wordmark_();
-  // Wordmark wherever the brand name appears; plain text if the image can’t be fetched.
-  const inline = wm
-    ? '<img src="cid:wm" alt="Saski’O" width="68" height="15" style="display:inline-block;width:68px;height:15px;border:0;vertical-align:-2px;margin:0">'
-    : 'Saski’O';
+  // Saski’O appears once in the body: the wordmark sign-off. Plain text if the image can’t be fetched.
   const sign = wm
-    ? '<img src="cid:wm" alt="Saski’O" width="96" height="21" style="display:inline-block;width:96px;height:21px;border:0;vertical-align:-3px;margin:0">'
-    : '<span style="font-family:Arial,sans-serif;font-size:20px;font-weight:600;color:#1F1B19">Saski’O</span>';
-  const body = "font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.6;color:#3D3835;margin:0 0 18px 0;";
+    ? '<img src="cid:wm" alt="Saski’O" width="128" height="28" style="display:inline-block;width:128px;height:28px;border:0;vertical-align:-4px;margin:0">'
+    : '<span style="font-family:Arial,sans-serif;font-size:24px;font-weight:600;color:#1F1B19">Saski’O</span>';
+  const body = "font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.6;color:#3D3835;margin:0 0 14px 0;text-align:center;";
   const html =
     '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
     '<body style="margin:0;padding:0;background:#F4F2EF">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F2EF"><tr><td align="center" style="padding:40px 24px">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:460px"><tr><td align="left">' +
-    '<p style="' + body + '">Thank you for contacting&nbsp;' + inline + '</p>' +
-    '<p style="' + body + 'margin-bottom:22px">I’m reviewing your enquiry, and I’ll be back in touch soon.</p>' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F2EF"><tr><td align="center" style="padding:44px 20px">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px"><tr><td align="center">' +
+    '<p style="' + body + 'color:#1F1B19;font-size:22px">Thank you for your enquiry!</p>' +
+    '<p style="' + body + 'margin-bottom:26px">I’ll be in touch soon.</p>' +
     '<p style="' + body + 'color:#1F1B19;margin:0">' + sign + '&nbsp;✨</p>' +
     brandFooter_() +
     '</td></tr></table></td></tr></table></body></html>';
-  const text = 'Thank you for contacting Saski’O\n\nI’m reviewing your enquiry, and I’ll be back in touch soon.\n\nSaski’O ✨\n\n' + brandFooterText_();
+  const text = 'Thank you for your enquiry!\n\nI’ll be in touch soon.\n\nSaski’O ✨\n\n' + brandFooterText_();
   MailApp.sendEmail({
     to: String(d.email).trim(), subject: 'Thank you for your enquiry | Saski’O',
     body: text, htmlBody: html, inlineImages: wm ? { wm: wm } : {},
@@ -234,7 +233,7 @@ function sendTestAcknowledgement() {
 
 function sendInternal_(id, d) {
   const rows = [
-    ['Reference', id], ['Name', d.name], ['Email', d.email], ['Phone', d.phone || '—'], ['Prefers', d.contact || '—'],
+    ['Reference', id], ['Name', d.name], ['Email', d.email], ['Phone', ukMobile_(d.phone) || '—'], ['Prefers', d.contact || '—'],
     ['Destination / ideas', d.dest],
     ['When', d.dateMode === LISTS.dateMode[0] ? ukDate_(d.from) + (d.to ? ' – ' + ukDate_(d.to) : '') : d.flex],
     ['Duration', d.duration || '—'], ['Adults (18+)', d.adults],
@@ -242,7 +241,7 @@ function sendInternal_(id, d) {
     ['Budget (total)', d.budget], ['Already looking?', d.looking], ['Found a place', d.found || '—'],
     ['Interests', (d.interests || []).join('; ') || '—'], ['Additional details', d.notes || '—'],
     ['Source', (d.utm_source || 'unknown') + ' / ' + (d.utm_medium || 'unknown') + (d.utm_campaign ? ' / ' + d.utm_campaign : '')],
-    ['Entry', d.entry || '—'], ['Marketing consent', d.marketing ? 'Yes' : 'No']
+    ['Entry', d.entry || '—'], ['UK resident', d.ukResident === true ? 'Yes' : 'No'], ['Marketing consent', d.marketing ? 'Yes' : 'No']
   ];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
   const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">' +
@@ -287,21 +286,24 @@ function setup() {
   rng('Status').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(LISTS.status, true).setAllowInvalid(true).build());
   rng('Asset-library match').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(LISTS.asset, true).setAllowInvalid(true).build());
   ['Follow-up date', 'Last contacted', 'Delete after'].forEach(n => rng(n).setNumberFormat('dd/mm/yyyy'));
-  ['Est. booking value (£)', 'Net commission (£)', 'Net £ per hour'].forEach(n => rng(n).setNumberFormat('£#,##0.00'));
-  ['Gross commission %', 'Saski’O share %'].forEach(n => rng(n).setNumberFormat('0%'));
+  ['Est. booking value (£)', 'Est. gross commission (£)', 'Est. net commission (£)', 'Est. hourly return (£)'].forEach(n => rng(n).setNumberFormat('£#,##0.00'));
+  rng('Supplier commission %').setNumberFormat('0.0%');
+  rng('Est. working hours').setNumberFormat('0.0');
 
-  // Calculated columns (one formula in the header row covers every new row)
-  const A = L('Enquiry ID');
-  sh.getRange(1, col('Net commission (£)')).setFormula(
-    '={"Net commission (£)";ARRAYFORMULA(IF((' + A + '2:' + A + '="")+(' + L('Est. booking value (£)') + '2:' + L('Est. booking value (£)') + '=""),"",' +
-    L('Est. booking value (£)') + '2:' + L('Est. booking value (£)') + '*N(' + L('Gross commission %') + '2:' + L('Gross commission %') + ')*IF(' +
-    L('Saski’O share %') + '2:' + L('Saski’O share %') + '="",0.8,' + L('Saski’O share %') + '2:' + L('Saski’O share %') + ')))}');
-  sh.getRange(1, col('Net £ per hour')).setFormula(
-    '={"Net £ per hour";ARRAYFORMULA(IF((' + L('Net commission (£)') + '2:' + L('Net commission (£)') + '="")+(N(' + L('Projected hours') + '2:' + L('Projected hours') + ')=0),"",' +
-    L('Net commission (£)') + '2:' + L('Net commission (£)') + '/' + L('Projected hours') + '2:' + L('Projected hours') + '))}');
-  sh.getRange(1, col('vs £25/hr benchmark')).setFormula(
-    '={"vs £25/hr benchmark";ARRAYFORMULA(IF(' + L('Net £ per hour') + '2:' + L('Net £ per hour') + '="","",IF(' +
-    L('Net £ per hour') + '2:' + L('Net £ per hour') + '>=25,"Above","Below")))}');
+  // Calculated columns (one formula in the header row covers every row; blank inputs give blank results, never errors)
+  const A = L('Enquiry ID'), V = L('Est. booking value (£)'), RT = L('Supplier commission %'), G = L('Est. gross commission (£)');
+  const NT = L('Est. net commission (£)'), H = L('Est. working hours'), HR = L('Est. hourly return (£)');
+  const col2 = (c) => c + '2:' + c;
+  // Gross = booking value × supplier commission % (accepts 10% or 10)
+  sh.getRange(1, col('Est. gross commission (£)')).setFormula('={"Est. gross commission (£)";ARRAYFORMULA(IF((' + col2(A) + '="")+(' + col2(V) + '="")+(' + col2(RT) + '=""),"",IFERROR(' +
+    col2(V) + '*IF(' + col2(RT) + '>1,' + col2(RT) + '/100,' + col2(RT) + '),"")))}');
+  // Net = gross × 80% (Saski’O share)
+  sh.getRange(1, col('Est. net commission (£)')).setFormula('={"Est. net commission (£)";ARRAYFORMULA(IF(' + col2(G) + '="","",IFERROR(' + col2(G) + '*0.8,"")))}');
+  // Hourly return = net ÷ working hours
+  sh.getRange(1, col('Est. hourly return (£)')).setFormula('={"Est. hourly return (£)";ARRAYFORMULA(IF((' + col2(NT) + '="")+(' + col2(H) + '="")+(' + col2(H) + '=0),"",IFERROR(' +
+    col2(NT) + '/' + col2(H) + ',"")))}');
+  // Benchmark = £25 net per hour
+  sh.getRange(1, col('vs £25/hr net benchmark')).setFormula('={"vs £25/hr net benchmark";ARRAYFORMULA(IF(' + col2(HR) + '="","",IF(' + col2(HR) + '>=25,"Above","Below")))}');
   // Delete after: 12 months after last contact, or after submission if never contacted (Submitted is dd/MM/yyyy HH:mm text)
   const B = L('Submitted (UK)'), LC = L('Last contacted');
   sh.getRange(1, col('Delete after')).setFormula(
@@ -316,7 +318,7 @@ function setup() {
     .setBackground('#FDE2DF').setRanges([rng('Delete after')]).build());
   cf.push(SpreadsheetApp.newConditionalFormatRule().whenTextStartsWith('FAILED').setBackground('#FDE2DF').setFontColor('#A1271F')
     .setRanges([rng('Internal notification'), rng('Acknowledgement email')]).build());
-  cf.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Below').setFontColor('#A1271F').setRanges([rng('vs £25/hr benchmark')]).build());
+  cf.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Below').setFontColor('#A1271F').setRanges([rng('vs £25/hr net benchmark')]).build());
   sh.setConditionalFormatRules(cf);
   sh.setColumnWidths(1, headers.length, 140);
   [col('Destination / ideas'), col('Found a place — details'), col('Additional details / occasion'), col('Next action')].forEach(c => sh.setColumnWidth(c, 260));
@@ -332,6 +334,13 @@ function setup() {
     AUTO.map(h => [h, 'Automation', ''])).concat(MANUAL.map(m => [m[0], m[1] === 'formula' ? 'Formula' : 'Victoria', '']));
   dd.getRange(1, 1, dict.length, 3).setValues(dict); dd.getRange(1, 1, 1, 3).setFontWeight('bold'); dd.setFrozenRows(1);
   dd.getRange(2, 3, 1, 1).setValue('Format SD-YYMMDD-NNN');
+  const note = (h, txt) => dd.getRange(headers.indexOf(h) + 2, 3).setValue(txt);
+  note('Est. gross commission (£)', 'Est. booking value × Supplier commission % (enter 10% or 10). Internal only.');
+  note('Est. net commission (£)', 'Est. gross commission × 80% (Saski’O share).');
+  note('Est. hourly return (£)', 'Est. net commission ÷ Est. working hours.');
+  note('vs £25/hr net benchmark', 'Above / Below the £25 net per hour benchmark.');
+  note('UK resident confirmed', 'Customer ticked “I confirm I am a UK resident.” (required).');
+  note('Phone', 'UK mobile, stored as +44 7xxx xxxxxx.');
   dd.getRange(headers.indexOf('Delete after') + 2, 3).setValue('12 months after last contact (or submission). Delete the row when due unless the enquiry led to a booking.');
 
   // Log
@@ -341,6 +350,14 @@ function setup() {
   const s1 = ss.getSheetByName('Sheet1'); if (s1 && s1.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(s1);
   ss.setActiveSheet(sh);
   return 'Setup complete: ' + headers.length + ' columns';
+}
+
+/** One-off (18 Nov): insert the 'UK resident confirmed' column after 'Client submission ID', then refresh setup. Safe to re-run. */
+function migrateV6() {
+  const sh = ss_().getSheetByName(CONFIG.SHEET);
+  const pos = AUTO.indexOf('UK resident confirmed') + 1;           // 35
+  if (String(sh.getRange(1, pos).getValue()) === 'Status') sh.insertColumnBefore(pos);
+  return setup();
 }
 
 /** Run once from the editor to authorise sending email and check it works. Sends one test email to hello.saskio@gmail.com. */
@@ -358,6 +375,14 @@ function lastDataRow_(sh) {
   return 1;
 }
 function ss_() { return SpreadsheetApp.openById(CONFIG.SHEET_ID); }
+// UK mobile: accepts 07…, +44 7…, 0044 7…, 44 7…, (0)7… or 7…; returns '+44 7xxx xxxxxx' or '' if not a UK mobile
+function ukMobile_(raw) {
+  let s = String(raw || '').replace(/\(0\)/g, '').replace(/[\s\-().]/g, '');
+  if (!s) return '';
+  if (s.indexOf('+44') === 0) s = s.slice(3); else if (s.indexOf('0044') === 0) s = s.slice(4);
+  else if (s.indexOf('44') === 0 && s.length === 12) s = s.slice(2); else if (s.charAt(0) === '0') s = s.slice(1);
+  return /^7\d{9}$/.test(s) ? '+44 ' + s.slice(0, 4) + ' ' + s.slice(4) : '';
+}
 function s_(x) { return x == null ? '' : String(x).trim(); }
 function ukDate_(iso) { if (!iso) return ''; const p = String(iso).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso); }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
