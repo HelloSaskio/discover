@@ -94,7 +94,7 @@ function doPost(e) {
     if (last > 1) {
       const prev = sh.getRange(Math.max(2, last - 299), 1, Math.min(300, last - 1), 1).getValues()
         .map(r => String(r[0])).filter(x => x.indexOf('SD-' + day + '-') === 0);
-      n = prev.length + 1;
+      n = prev.reduce((m, x) => Math.max(m, parseInt(x.slice(10), 10) || 0), 0) + 1;   // highest today + 1 (never reuses a number)
     }
     id = 'SD-' + day + '-' + ('00' + n).slice(-3);
     const ts = Utilities.formatDate(now, CONFIG.TIMEZONE, 'dd/MM/yyyy HH:mm');
