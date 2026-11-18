@@ -173,34 +173,63 @@ function wordmark_() {
   return b64 ? Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', 'saskio-wordmark.png') : null;
 }
 
+// Reusable Saski’O branded contact footer (Ink & Paper). Used by customer emails.
+function brandFooter_() {
+  const caps = 'font-family:Arial,Helvetica,sans-serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#736C67;margin:0;';
+  const line = 'font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.9;color:#3D3835;margin:0;';
+  const a = 'color:#3D3835;text-decoration:none;';
+  return '' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:36px;border-top:1px solid #D8D2CC"><tr><td align="center" style="padding:24px 0 0 0">' +
+    '<p style="' + caps + '">Experience led travel</p>' +
+    '<p style="' + caps + 'letter-spacing:1.5px;font-size:10px;margin:8px 0 16px 0">Discover &bull; Belong &bull; Experience &bull; Connect</p>' +
+    '<p style="' + line + '">📞 <a href="tel:+447876327901" style="' + a + '">+44 (0)7876 327901</a></p>' +
+    '<p style="' + line + '">✉️ <a href="mailto:hello.saskio@gmail.com" style="' + a + '">hello.saskio@gmail.com</a></p>' +
+    '<p style="' + line + '">Instagram: <a href="https://www.instagram.com/hello.saskio" style="' + a + '">@hello.saskio</a></p>' +
+    '<p style="' + line + '">Facebook: <a href="https://www.facebook.com/hello.saskio" style="' + a + '">hello.saskio</a></p>' +
+    '<p style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#8A827C;margin:18px 0 0 0">' +
+    'You’re receiving this email because you made an enquiry through Discover.' +
+    (CONFIG.SITE_URL.indexOf('http') === 0 ? '<br><a href="' + CONFIG.SITE_URL + '#privacy" style="color:#8A827C">Privacy notice</a>' : '') +
+    '</p></td></tr></table>';
+}
+function brandFooterText_() {
+  return 'EXPERIENCE LED TRAVEL\nDiscover • Belong • Experience • Connect\n\n' +
+    '📞 +44 (0)7876 327901\n✉️ hello.saskio@gmail.com\nInstagram: @hello.saskio\nFacebook: hello.saskio\n\n' +
+    'You’re receiving this email because you made an enquiry through Discover.' +
+    (CONFIG.SITE_URL.indexOf('http') === 0 ? '\nPrivacy notice: ' + CONFIG.SITE_URL + '#privacy' : '');
+}
+
 function sendAck_(d) {
   const wm = wordmark_();
+  // Wordmark wherever the brand name appears; plain text if the image can’t be fetched.
+  const inline = wm
+    ? '<img src="cid:wm" alt="Saski’O" width="68" height="15" style="display:inline-block;width:68px;height:15px;border:0;vertical-align:-2px;margin:0">'
+    : 'Saski’O';
   const sign = wm
-    ? '<img src="cid:wm" alt="Saski’O" width="100" height="22" style="display:block;width:100px;height:22px;border:0;margin:0 0 6px 0">'
-    : '<div style="font-family:Arial,sans-serif;font-size:20px;font-weight:600;color:#1F1B19;margin:0 0 6px 0">Saski’O</div>';
+    ? '<img src="cid:wm" alt="Saski’O" width="96" height="21" style="display:inline-block;width:96px;height:21px;border:0;vertical-align:-3px;margin:0">'
+    : '<span style="font-family:Arial,sans-serif;font-size:20px;font-weight:600;color:#1F1B19">Saski’O</span>';
   const body = "font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.6;color:#3D3835;margin:0 0 18px 0;";
   const html =
     '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
     '<body style="margin:0;padding:0;background:#F4F2EF">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F2EF"><tr><td align="center" style="padding:40px 24px">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:460px"><tr><td align="left">' +
-    '<p style="' + body + '">Thank you for your enquiry.</p>' +
-    '<p style="' + body + '">I’ll personally review it and be in touch.</p>' +
-    '<p style="' + body + 'margin-bottom:14px">Speak soon,</p>' +
-    sign +
-    '<p style="' + body + 'color:#1F1B19;margin:0">x</p>' +
-    '<p style="font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#8A827C;margin:40px 0 0 0;padding-top:14px;border-top:1px solid #D8D2CC">' +
-    'hello.saskio@gmail.com · +44 7876 327901' +
-    (CONFIG.SITE_URL.indexOf('http') === 0 ? ' · <a href="' + CONFIG.SITE_URL + '#privacy" style="color:#8A827C">Privacy notice</a>' : '') +
-    '</p>' +
+    '<p style="' + body + '">Thank you for contacting&nbsp;' + inline + '</p>' +
+    '<p style="' + body + 'margin-bottom:22px">I’m reviewing your enquiry, and I’ll be back in touch soon.</p>' +
+    '<p style="' + body + 'color:#1F1B19;margin:0">' + sign + '&nbsp;✨</p>' +
+    brandFooter_() +
     '</td></tr></table></td></tr></table></body></html>';
-  const text = 'Thank you for your enquiry.\n\nI’ll personally review it and be in touch.\n\nSpeak soon,\nSaski’O\nx\n\n' +
-    'hello.saskio@gmail.com · +44 7876 327901';
+  const text = 'Thank you for contacting Saski’O\n\nI’m reviewing your enquiry, and I’ll be back in touch soon.\n\nSaski’O ✨\n\n' + brandFooterText_();
   MailApp.sendEmail({
     to: String(d.email).trim(), subject: 'Thank you for your enquiry | Saski’O',
     body: text, htmlBody: html, inlineImages: wm ? { wm: wm } : {},
     name: 'Saski’O'
   });
+}
+
+/** Run from the editor to preview the customer acknowledgement (sends to the test inbox; no register row). */
+function sendTestAcknowledgement() {
+  sendAck_({ email: 'hello.saskio+discovertest@gmail.com' });
+  return 'Preview sent to hello.saskio+discovertest@gmail.com';
 }
 
 function sendInternal_(id, d) {
