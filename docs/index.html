@@ -228,6 +228,7 @@ function form(){
   const d=S.d; let h=progress()+`<div class="f-body"><form id="f" novalidate>`;
   if(S.step===1){
     h+=`<h2>Your trip</h2><p class="lede">Just the essentials. Rough ideas are perfect.</p>
+    <div class="field" data-f="uk"><label class="check"><input type="checkbox" id="ukResident" ${d.ukResident?'checked':''}><span>I confirm I am a UK resident.</span></label><div class="err">Please confirm you are a UK resident.</div></div>
     <div class="field" data-f="dest"><label for="dest">Where would you like to go, or what kind of holiday?</label>
       <textarea class="short" id="dest" maxlength="${MAX.dest}" autocapitalize="sentences" placeholder="e.g. Japan, the Italian lakes, a safari, somewhere warm">${esc(d.dest)}</textarea>${counter('dest')}
       <div class="err">Please tell me a destination or the kind of holiday you have in mind.</div></div>
@@ -281,7 +282,6 @@ function form(){
     <div class="field"><span class="lbl">How would you prefer I contact you? <span class="opt">(optional)</span></span>${chips('contact',CONTACT,d.contact,false)}</div>
     <div class="field" data-f="phone"><label for="phone">Phone ${needPhone()?'':'<span class="opt">(optional)</span>'}<span class="sub">UK mobile</span></label><div class="tel"><span class="cc" aria-hidden="true">🇬🇧 +44</span><input type="tel" id="phone" maxlength="${MAX.phone}" autocomplete="tel-national" inputmode="tel" enterkeyhint="done" value="${esc(d.phone)}" placeholder="7700 900123" aria-label="UK mobile number"></div><div class="err" id="phoneErr">Please enter a UK mobile number, e.g. 07700 900123.</div></div>
 
-    <div class="field" data-f="uk"><label class="check"><input type="checkbox" id="ukResident" ${d.ukResident?'checked':''}><span>I confirm I am a UK resident.</span></label><div class="err">Please confirm you are a UK resident.</div></div>
     <label class="check"><input type="checkbox" id="marketing" ${d.marketing?'checked':''}><span>I’d like to receive occasional travel inspiration from ${W}. <span class="opt">(optional, unsubscribe any time)</span></span></label>
     <p class="privnote">I’ll only use your details to respond to your enquiry. See the <a href="#privacy" data-privacy>privacy notice</a>.</p>
     <div class="hp" aria-hidden="true"><label>Website <input type="text" id="website" tabindex="-1" autocomplete="off" value=""></label></div>
@@ -373,6 +373,7 @@ function mark(f,bad){const el=document.querySelector(`#app [data-f="${f}"]`);if(
 function validate(){
   const d=S.d;let bad=[];
   if(S.step===1){
+    if(mark('uk',!d.ukResident))bad.push('uk');
     if(mark('dest',!d.dest))bad.push('dest');
     if(mark('dateMode',!d.dateMode))bad.push('dateMode');
     if(d.dateMode==='I have dates in mind'){
@@ -384,13 +385,13 @@ function validate(){
     if(mark('ages',d.children>0&&d.ages.slice(0,d.children).some(a=>a===''||a===undefined)))bad.push('ages');
   }
   if(S.step===2){if(mark('budget',!d.budget))bad.push('budget');if(mark('looking',!d.looking))bad.push('looking');}
+  if(S.step===3&&!d.ukResident){S.step=1;render();mark('uk',true);const u=document.querySelector('#app [data-f="uk"]');if(u)u.scrollIntoView({block:'center'});return false;}
   if(S.step===3){
     if(mark('name',!d.name))bad.push('name');
     if(mark('email',!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)))bad.push('email');
     {const ph=ukMobile(d.phone),empty=!String(d.phone||'').trim();const pe=document.getElementById('phoneErr');
      if(pe)pe.textContent=empty?('Please add a UK mobile number so I can '+(d.contact==='WhatsApp'?'message you on WhatsApp.':'call you.')):'Please enter a UK mobile number, e.g. 07700 900123.';
      if(mark('phone',(needPhone()&&empty)||(!empty&&!ph)))bad.push('phone');}
-    if(mark('uk',!d.ukResident))bad.push('uk');
   }
   if(bad.length){const el=document.querySelector(`#app [data-f="${bad[0]}"]`);if(el)el.scrollIntoView({block:'center',behavior:'smooth'});}
   return !bad.length;
