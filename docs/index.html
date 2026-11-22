@@ -155,6 +155,7 @@ button.lnk{background:none;border:0;padding:0;font:inherit;text-decoration:under
 
 .nw{white-space:nowrap}
 .ty .note{font-family:var(--font);font-size:13px;line-height:1.6;color:var(--muted);max-width:300px;margin:32px auto 0}
+.cta-wrap.cta-top{padding:4px 0 34px}
 </style>
 </head>
 <body>
@@ -206,6 +207,8 @@ function home(){
   return `<div class="home">
     <div class="brand">${W}<div class="eyebrow">Experience led travel</div></div>
     <p class="intro">Life’s biggest trips. Tell me where you’d love to go, and I’ll start shaping a trip around the way you like to <span class="nw">travel&nbsp;✨</span></p>
+    <div class="cta-wrap cta-top"><button class="primary" data-go="form">Discover now</button>
+    <div class="micro">Takes about 2 minutes</div></div>
     <div class="stages-title"><span class="eyebrow type">Start your journey here</span></div>
     ${stages.map((s,i)=>`<div class="stage"><div class="n">0${i+1}</div><div><h3>${s[0]}</h3><p>${s[1]}</p></div></div>`).join('')}
     <div class="cta-wrap"><button class="primary" data-go="form">Discover now</button>
